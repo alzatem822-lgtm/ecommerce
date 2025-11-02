@@ -7,6 +7,9 @@ import { CrearUsuarioDto } from './dto/crear-usuario.dto';
 import * as bcrypt from 'bcryptjs';
 import { ServicioEmailService } from '../servicios-externos/servicio-email.service';
 import { CodigoVerificacion } from '../verificacion-dos-factores/entidades/codigo-verificacion.entity';
+import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto'; // ← AÑADIR
+import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto'; // ← AÑADIR
+
 
 @Injectable()
 export class UsuariosService {
@@ -106,4 +109,42 @@ export class UsuariosService {
   async marcarComoVerificado(id: string): Promise<void> {
     await this.usuariosRepository.update(id, { verificado: true });
   }
+
+async actualizarPerfil(id: string, actualizarPerfilDto: ActualizarPerfilDto): Promise<Usuario> {
+  const usuario = await this.encontrarPorId(id);
+  
+  // Si viene password, la hasheamos
+  if (actualizarPerfilDto.password) {
+    const salt = await bcrypt.genSalt();
+    actualizarPerfilDto.password = await bcrypt.hash(actualizarPerfilDto.password, salt);
+  }
+
+  // Actualizar solo campos permitidos
+  await this.usuariosRepository.update(id, actualizarPerfilDto);
+  
+  // Devolver usuario actualizado
+  return await this.encontrarPorId(id);
+}
+
+async actualizarUsuario(id: string, actualizarUsuarioDto: ActualizarUsuarioDto): Promise<Usuario> {
+  const usuario = await this.encontrarPorId(id);
+  
+  // Si viene password, la hasheamos
+  if (actualizarUsuarioDto.password) {
+    const salt = await bcrypt.genSalt();
+    actualizarUsuarioDto.password = await bcrypt.hash(actualizarUsuarioDto.password, salt);
+  }
+
+  // Actualizar todos los campos (admin puede editar todo)
+  await this.usuariosRepository.update(id, actualizarUsuarioDto);
+  
+  // Devolver usuario actualizado
+  return await this.encontrarPorId(id);
+}
+
+async eliminarUsuario(id: string): Promise<void> {
+  const usuario = await this.encontrarPorId(id);
+  await this.usuariosRepository.delete(id);
+}
+
 }
