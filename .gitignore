@@ -1,0 +1,15 @@
+/node_modules
+/dist
+/.tscache
+/coverage
+.env
+.env.development
+.env.production
+.log
+npm-debug.log
+yarn-debug.log*
+.DS_Store
+Thumbs.db
+.vscode
+ADMIN_EMAIL=admin@ecommerce.com
+ADMIN_PASSWORD=Admin123!
