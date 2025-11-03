@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 
 @Entity('administradores')
 export class Administrador {
@@ -25,4 +25,8 @@ export class Administrador {
 
   @UpdateDateColumn()
   fechaActualizacion: Date;
+
+  // ✅ SOLUCIÓN: Usar string para evitar import circular
+  @OneToMany('Producto', 'administrador')
+  productos: any[];
 }
