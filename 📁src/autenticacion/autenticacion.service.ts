@@ -1,3 +1,4 @@
+// En: src/autenticacion/autenticacion.service.ts
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -46,25 +47,6 @@ export class AutenticacionService {
   }
 
   async loginUsuario(usuario: Usuario) {
-    // Si el usuario requiere verificación 2FA
-    if (!usuario.verificado) {
-      
-      await this.verificacionDosFactoresService.enviarCodigoVerificacion(usuario.id, usuario.email);
-
-      const payload2FA = { 
-        email: usuario.email, 
-        sub: usuario.id, 
-        rol: usuario.rol,
-        esToken2FA: true 
-      };
-
-      return {
-        mensaje: 'Se ha enviado un código de verificación a tu email',
-        requiereVerificacion: true,
-        token_2FA: this.jwtService.sign(payload2FA, { expiresIn: '10m' }),
-      };
-    }
-    
     const payload = { 
       email: usuario.email, 
       sub: usuario.id, 
@@ -72,7 +54,8 @@ export class AutenticacionService {
     };
     
     return {
-      access_token: this.jwtService.sign(payload),
+      // ✅ Access token - 1 HORA
+      access_token: this.jwtService.sign(payload, { expiresIn: '1h' }),
       usuario: {
         id: usuario.id,
         email: usuario.email,
@@ -91,7 +74,8 @@ export class AutenticacionService {
     };
     
     return {
-      access_token: this.jwtService.sign(payload),
+      // ✅ Access token - 1 HORA
+      access_token: this.jwtService.sign(payload, { expiresIn: '1h' }),
       administrador: {
         id: administrador.id,
         email: administrador.email,
@@ -103,10 +87,8 @@ export class AutenticacionService {
   }
 
   async verificarCodigo2FA(usuarioId: string, codigo: string) {
-    // ✅ CORRECCIÓN: Primero obtener el usuario por ID para obtener su email
     const usuario = await this.usuariosService.encontrarPorId(usuarioId);
     
-    // ✅ CORRECCIÓN: Usar el email del usuario, no el ID
     const esValido = await this.verificacionDosFactoresService.verificarCodigo(usuario.email, codigo);
     
     if (esValido) {
@@ -121,7 +103,8 @@ export class AutenticacionService {
       };
       
       return {
-        access_token: this.jwtService.sign(payload),
+        // ✅ Access token - 1 HORA
+        access_token: this.jwtService.sign(payload, { expiresIn: '1h' }),
         usuario: {
           id: usuarioActualizado.id,
           email: usuarioActualizado.email,

@@ -1,3 +1,4 @@
+// En: src/usuarios/usuarios.controller.ts
 import { 
   Controller, 
   Post, 
@@ -11,14 +12,14 @@ import {
 } from '@nestjs/common';
 import { UsuariosService } from './usuarios.service';
 import { CrearUsuarioDto } from './dto/crear-usuario.dto';
-import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto'; // ← NUEVO
-import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto'; // ← NUEVO
+import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto';
+import { ActualizarUsuarioDto } from './dto/actualizar-usuario.dto';
 import { JwtGuardia } from '../autenticacion/guardias/jwt.guardia';
 import { RolesGuardia } from '../autenticacion/guardias/roles.guardia';
 import { Roles } from '../autenticacion/decoradores/roles.decorador';
 import { JwtService } from '@nestjs/jwt';
-import { ObtenerUsuario } from '../autenticacion/decoradores/obtener-usuario.decorador'; // ← NUEVO
-import { Usuario } from './entidades/usuario.entity'; // ← NUEVO
+import { ObtenerUsuario } from '../autenticacion/decoradores/obtener-usuario.decorador';
+import { Usuario } from './entidades/usuario.entity';
 
 @Controller('usuarios')
 export class UsuariosController {
@@ -31,14 +32,18 @@ export class UsuariosController {
   async registrar(@Body() crearUsuarioDto: CrearUsuarioDto) {
     const usuario = await this.usuariosService.crear(crearUsuarioDto);
     
-    const payload2FA = { 
-      email: usuario.email, 
-      sub: usuario.id, 
-      rol: usuario.rol,
-      esToken2FA: true 
-    };
-
-    const token_2FA = this.jwtService.sign(payload2FA, { expiresIn: '10m' });
+    // ✅ Token de verificación - 15 MINUTOS
+    const tokenVerificacion = this.jwtService.sign(
+      { 
+        email: usuario.email, 
+        sub: usuario.id, 
+        tipo: 'verificacion_2fa'
+      },
+      { 
+        expiresIn: '15m', // ← 15 MINUTOS
+        secret: process.env.JWT_VERIFICACION_SECRET || 'secreto_verificacion_diferente'
+      }
+    );
 
     return {
       mensaje: 'Usuario registrado. Se ha enviado un código de verificación a tu email',
@@ -48,19 +53,18 @@ export class UsuariosController {
         nombre: usuario.nombre,
         apellido: usuario.apellido,
       },
-      token_2FA: token_2FA,
+      token_verificacion: tokenVerificacion,
       requiereVerificacion: true,
     };
   }
 
-  // ✅ NUEVO: Usuario ve su propio perfil
+  // ... resto del código igual ...
   @Get('perfil')
   @UseGuards(JwtGuardia)
   async obtenerPerfil(@ObtenerUsuario() usuario: Usuario) {
     return usuario;
   }
 
-  // ✅ NUEVO: Usuario edita su propio perfil
   @Put('perfil')
   @UseGuards(JwtGuardia)
   async actualizarPerfil(
@@ -70,7 +74,6 @@ export class UsuariosController {
     return this.usuariosService.actualizarPerfil(usuario.id, actualizarPerfilDto);
   }
 
-  // ✅ YA EXISTÍA: Admin ve todos los usuarios
   @Get()
   @UseGuards(JwtGuardia, RolesGuardia)
   @Roles('admin')
@@ -78,7 +81,6 @@ export class UsuariosController {
     return this.usuariosService.obtenerTodos();
   }
 
-  // ✅ NUEVO: Admin ve un usuario específico
   @Get(':id')
   @UseGuards(JwtGuardia, RolesGuardia)
   @Roles('admin')
@@ -86,7 +88,6 @@ export class UsuariosController {
     return this.usuariosService.encontrarPorId(id);
   }
 
-  // ✅ NUEVO: Admin edita cualquier usuario
   @Put(':id')
   @UseGuards(JwtGuardia, RolesGuardia)
   @Roles('admin')
@@ -97,7 +98,6 @@ export class UsuariosController {
     return this.usuariosService.actualizarUsuario(id, actualizarUsuarioDto);
   }
 
-  // ✅ NUEVO: Admin elimina usuario
   @Delete(':id')
   @UseGuards(JwtGuardia, RolesGuardia)
   @Roles('admin')

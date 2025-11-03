@@ -1,18 +1,15 @@
-// En: src/verificacion-dos-factores/verificacion-dos-factores.controller.ts
 import { 
   Controller, 
   Post, 
-  Body, 
-  UseGuards,
+  Body,
   UnauthorizedException, 
+  UseGuards,
+  Req
 } from '@nestjs/common';
 import { VerificacionDosFactoresService } from './verificacion-dos-factores.service';
 import { VerificarCodigoDto } from './dto/verificar-codigo.dto';
-import { JwtGuardia } from '../autenticacion/guardias/jwt.guardia';
-import { ObtenerUsuario } from '../autenticacion/decoradores/obtener-usuario.decorador';
-import { Usuario } from '../usuarios/entidades/usuario.entity'; 
 import { UsuariosService } from '../usuarios/usuarios.service';
-import { JwtService } from '@nestjs/jwt'; // ← AÑADIR
+import { VerificacionTokenGuard } from '../autenticacion/guardias/verificacion-token.guard'; // ← NUEVO IMPORT
 
 @Controller('verificacion-dos-factores')
 export class VerificacionDosFactoresController {
@@ -20,20 +17,16 @@ export class VerificacionDosFactoresController {
   constructor(
     private readonly verificacionDosFactoresService: VerificacionDosFactoresService,
     private readonly usuariosService: UsuariosService,
-    private readonly jwtService: JwtService, // ← AÑADIR
   ) {}
 
-  @Post('solicitar-codigo')
-  @UseGuards(JwtGuardia) 
-  async solicitarCodigo(@ObtenerUsuario() usuario: Usuario) {
-    return this.verificacionDosFactoresService.enviarCodigoVerificacion(
-      usuario.id,
-      usuario.email,
-    );
-  }
-
   @Post('verificar')
-  async verificarCodigo(@Body() verificarCodigoDto: VerificarCodigoDto) {
+  @UseGuards(VerificacionTokenGuard) // ← NUEVO GUARD
+  async verificarCodigo(
+    @Body() verificarCodigoDto: VerificarCodigoDto,
+    @Req() request: any // ← Obtener usuario del token especial
+  ) {
+    const usuarioId = request.user.sub; // ← Del token especial de verificación
+
     const esCodigoValido = await this.verificacionDosFactoresService.verificarCodigo(
       verificarCodigoDto.email,
       verificarCodigoDto.codigo,
@@ -43,22 +36,14 @@ export class VerificacionDosFactoresController {
       throw new UnauthorizedException('Código de verificación inválido o expirado');
     }
 
-    const usuario = await this.usuariosService.encontrarPorEmail(verificarCodigoDto.email);
+    // Usar el usuarioId del token en lugar de buscar por email
+    await this.usuariosService.marcarComoVerificado(usuarioId);
     
-    // ✅ CORRECCIÓN: Marcar como verificado y generar token directamente
-    // EVITA la verificación duplicada en AutenticacionService.verificarCodigo2FA
-    await this.usuariosService.marcarComoVerificado(usuario.id);
-    
-    const usuarioActualizado = await this.usuariosService.encontrarPorId(usuario.id);
+    const usuarioActualizado = await this.usuariosService.encontrarPorId(usuarioId);
 
-    const payload = { 
-      email: usuarioActualizado.email, 
-      sub: usuarioActualizado.id, 
-      rol: usuarioActualizado.rol 
-    };
-    
     return {
-      access_token: this.jwtService.sign(payload),
+      mensaje: 'Cuenta verificada exitosamente. Ahora puedes iniciar sesión.',
+      verificado: true,
       usuario: {
         id: usuarioActualizado.id,
         email: usuarioActualizado.email,
