@@ -16,7 +16,7 @@ export class ProductosService {
     try {
       const producto = this.productosRepository.create({
         ...crearProductoDto,
-        administradorId, // ✅ CAMBIAR: de usuarioId a administradorId
+        administradorId,
       });
 
       return await this.productosRepository.save(producto);
@@ -26,18 +26,15 @@ export class ProductosService {
     }
   }
 
-  // Los demás métodos se mantienen igual por ahora
   async encontrarTodos(): Promise<Producto[]> {
     return await this.productosRepository.find({
       where: { activo: true },
-      relations: ['administrador'], // ✅ CAMBIAR: de 'usuario' a 'administrador'
     });
   }
 
   async encontrarPorId(id: string): Promise<Producto> {
     const producto = await this.productosRepository.findOne({
       where: { id, activo: true },
-      relations: ['administrador'], // ✅ CAMBIAR: de 'usuario' a 'administrador'
     });
 
     if (!producto) {
@@ -50,11 +47,9 @@ export class ProductosService {
   async encontrarPorCategoria(categoria: string): Promise<Producto[]> {
     return await this.productosRepository.find({
       where: { categoria, activo: true },
-      relations: ['administrador'], // ✅ CAMBIAR: de 'usuario' a 'administrador'
     });
   }
 
-  // ... el resto de métodos se mantienen igual
   async actualizar(id: string, actualizarProductoDto: ActualizarProductoDto): Promise<Producto> {
     const producto = await this.encontrarPorId(id);
     

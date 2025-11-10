@@ -3,13 +3,10 @@ import {
   Post, 
   Body,
   UnauthorizedException, 
-  UseGuards,
-  Req
 } from '@nestjs/common';
 import { VerificacionDosFactoresService } from './verificacion-dos-factores.service';
 import { VerificarCodigoDto } from './dto/verificar-codigo.dto';
 import { UsuariosService } from '../usuarios/usuarios.service';
-import { VerificacionTokenGuard } from '../autenticacion/guardias/verificacion-token.guard'; // ← NUEVO IMPORT
 
 @Controller('verificacion-dos-factores')
 export class VerificacionDosFactoresController {
@@ -20,13 +17,7 @@ export class VerificacionDosFactoresController {
   ) {}
 
   @Post('verificar')
-  @UseGuards(VerificacionTokenGuard) // ← NUEVO GUARD
-  async verificarCodigo(
-    @Body() verificarCodigoDto: VerificarCodigoDto,
-    @Req() request: any // ← Obtener usuario del token especial
-  ) {
-    const usuarioId = request.user.sub; // ← Del token especial de verificación
-
+  async verificarCodigo(@Body() verificarCodigoDto: VerificarCodigoDto) {
     const esCodigoValido = await this.verificacionDosFactoresService.verificarCodigo(
       verificarCodigoDto.email,
       verificarCodigoDto.codigo,
@@ -36,10 +27,11 @@ export class VerificacionDosFactoresController {
       throw new UnauthorizedException('Código de verificación inválido o expirado');
     }
 
-    // Usar el usuarioId del token en lugar de buscar por email
-    await this.usuariosService.marcarComoVerificado(usuarioId);
+    const usuario = await this.usuariosService.encontrarPorEmail(verificarCodigoDto.email);
     
-    const usuarioActualizado = await this.usuariosService.encontrarPorId(usuarioId);
+    await this.usuariosService.marcarComoVerificado(usuario.id);
+    
+    const usuarioActualizado = await this.usuariosService.encontrarPorId(usuario.id);
 
     return {
       mensaje: 'Cuenta verificada exitosamente. Ahora puedes iniciar sesión.',
