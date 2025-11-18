@@ -10,6 +10,7 @@ import { ServiciosExternosModule } from './servicios-externos/servicios-externos
 import { BaseDatosModule } from './base-datos/base-datos.module';
 import { ProductosModule } from './productos/productos.module'; 
 import { CarritoModule } from './carrito/carrito.module';
+import { OrdenesModule } from './ordenes/ordenes.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { CarritoModule } from './carrito/carrito.module';
     BaseDatosModule,
     ProductosModule,
     CarritoModule,
+    OrdenesModule,
   ],
 })
 export class AppModule {}
