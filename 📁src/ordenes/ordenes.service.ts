@@ -11,7 +11,7 @@ import { Usuario } from '../usuarios/entidades/usuario.entity';
 import { Producto } from '../productos/entidades/producto.entity';
 import { Carrito } from '../carrito/entidades/carrito.entity';
 import { CarritoItem } from '../carrito/entidades/carrito-item.entity';
-import { NotificacionesService } from '../notificaciones/servicios/notificaciones.service'; // ✅ AÑADIR IMPORT
+import { NotificacionesService } from '../notificaciones/servicios/notificaciones.service';
 
 @Injectable()
 export class OrdenesService {
@@ -26,23 +26,21 @@ export class OrdenesService {
     private carritoRepository: Repository<Carrito>,
     @InjectRepository(CarritoItem)
     private carritoItemRepository: Repository<CarritoItem>,
-    @InjectRepository(Usuario) // ✅ AÑADIR REPOSITORIO DE USUARIO
+    @InjectRepository(Usuario)
     private usuarioRepository: Repository<Usuario>,
-    private notificacionesService: NotificacionesService, // ✅ AÑADIR SERVICIO DE NOTIFICACIONES
+    private notificacionesService: NotificacionesService,
   ) {}
 
   async crearDesdeCarrito(usuarioId: string, crearOrdenDto: CrearOrdenDto): Promise<OrdenResponseDto> {
-    let ordenCreada; // Mover declaración para acceso en catch
+    let ordenCreada;
 
     try {
       console.log('🔍 DEBUG: Iniciando creación de orden para usuario:', usuarioId);
       
-      // ✅ VALIDACIÓN CRÍTICA: Verificar que usuarioId no sea null/undefined
       if (!usuarioId) {
         throw new BadRequestException('ID de usuario no válido');
       }
 
-      // 1. Obtener el carrito del usuario
       const carrito = await this.carritoRepository.findOne({
         where: { usuarioId },
         relations: ['items'],
@@ -60,7 +58,6 @@ export class OrdenesService {
 
       console.log('🔍 DEBUG: Items en carrito:', carrito.items);
 
-      // 2. Verificar stock de todos los productos
       for (const item of carrito.items) {
         console.log('🔍 DEBUG: Verificando producto ID:', item.productoId);
         
@@ -81,11 +78,9 @@ export class OrdenesService {
         }
       }
 
-      // 3. Generar número de orden único
       const numeroOrden = await this.generarNumeroOrden();
       console.log('🔍 DEBUG: Número de orden generado:', numeroOrden);
 
-      // 4. Crear la orden - ✅ ASEGURAR que usuarioId tiene valor
       const orden = this.ordenRepository.create({
         usuarioId: usuarioId,
         total: carrito.total,
@@ -102,7 +97,6 @@ export class OrdenesService {
       ordenCreada = await this.ordenRepository.save(orden);
       console.log('🔍 DEBUG: Orden guardada en BD:', ordenCreada);
 
-      // 5. Crear items de la orden y reducir stock
       for (const itemCarrito of carrito.items) {
         console.log('🔍 DEBUG: Procesando item del carrito:', itemCarrito);
         
@@ -110,7 +104,6 @@ export class OrdenesService {
           where: { id: itemCarrito.productoId },
         });
 
-        // Crear item de orden
         const ordenItem = this.ordenItemRepository.create({
           ordenId: ordenCreada.id,
           productoId: itemCarrito.productoId,
@@ -124,7 +117,6 @@ export class OrdenesService {
         await this.ordenItemRepository.save(ordenItem);
         console.log('🔍 DEBUG: OrdenItem guardado');
 
-        // Reducir stock del producto
         console.log('🔍 DEBUG: Stock antes:', producto.stock);
         producto.stock -= itemCarrito.cantidad;
         console.log('🔍 DEBUG: Stock después:', producto.stock);
@@ -133,13 +125,11 @@ export class OrdenesService {
         console.log('🔍 DEBUG: Stock actualizado en BD');
       }
 
-      // 6. Limpiar carrito
       console.log('🔍 DEBUG: Limpiando carrito ID:', carrito.id);
       await this.carritoItemRepository.delete({ carritoId: carrito.id });
       await this.carritoRepository.update(carrito.id, { total: 0 });
       console.log('🔍 DEBUG: Carrito limpiado');
 
-      // 7. Obtener orden completa para notificación
       const ordenCompleta = await this.ordenRepository.findOne({
         where: { id: ordenCreada.id },
         relations: ['items', 'items.producto'],
@@ -147,7 +137,6 @@ export class OrdenesService {
 
       console.log('🔍 DEBUG: Orden completa antes de transformar:', ordenCompleta);
 
-      // ✅ 8. ENVIAR NOTIFICACIÓN DE CONFIRMACIÓN (NUEVO)
       try {
         const usuario = await this.obtenerUsuarioParaNotificacion(usuarioId);
         const datosNotificacion = {
@@ -167,11 +156,13 @@ export class OrdenesService {
         console.log('📧 Notificación de confirmación enviada');
       } catch (error) {
         console.error('❌ Error enviando notificación:', error);
-        // No lanzamos error para no afectar la creación de la orden
       }
 
-      // ✅ TRANSFORMAR A DTO OPTIMIZADO
-      return plainToInstance(OrdenResponseDto, ordenCompleta);
+      // ✅ CORREGIDO: Añadir configuración para excluir datos sensibles
+      return plainToInstance(OrdenResponseDto, ordenCompleta, {
+        excludeExtraneousValues: true,
+        enableImplicitConversion: true,
+      });
 
     } catch (error) {
       console.error('🔍 ERROR DETALLADO EN CREAR ORDEN:');
@@ -190,9 +181,6 @@ export class OrdenesService {
     }
   }
 
-  /**
-   * ✅ MÉTODO AUXILIAR PARA OBTENER DATOS DE USUARIO
-   */
   private async obtenerUsuarioParaNotificacion(usuarioId: string): Promise<{ email: string; nombre: string }> {
     const usuario = await this.usuarioRepository.findOne({
       where: { id: usuarioId },
@@ -209,7 +197,6 @@ export class OrdenesService {
     };
   }
 
-  // ... (el resto de los métodos se mantienen igual)
   private async generarNumeroOrden(): Promise<string> {
     try {
       const fecha = new Date();
