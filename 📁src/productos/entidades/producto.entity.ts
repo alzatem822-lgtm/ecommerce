@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+import { Exclude } from 'class-transformer'; // ✅ AÑADIR IMPORT
 
 @Entity('productos')
 export class Producto {
@@ -40,6 +41,7 @@ export class Producto {
   administrador: any;
 
   @Column()
+  @Exclude() // ✅ OCULTAR ADMINISTRADOR ID
   administradorId: string;
 
   @CreateDateColumn()

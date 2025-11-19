@@ -7,6 +7,8 @@ import { OrdenItem } from './entidades/orden-item.entity';
 import { Producto } from '../productos/entidades/producto.entity';
 import { Carrito } from '../carrito/entidades/carrito.entity';
 import { CarritoItem } from '../carrito/entidades/carrito-item.entity';
+import { Usuario } from '../usuarios/entidades/usuario.entity'; // ✅ AÑADIR
+import { NotificacionesModule } from '../notificaciones/notificaciones.module'; // ✅ AÑADIR
 
 @Module({
   imports: [
@@ -15,8 +17,10 @@ import { CarritoItem } from '../carrito/entidades/carrito-item.entity';
       OrdenItem, 
       Producto, 
       Carrito, 
-      CarritoItem
-    ])
+      CarritoItem,
+      Usuario // ✅ AÑADIR USUARIO
+    ]),
+    NotificacionesModule, // ✅ AÑADIR MÓDULO DE NOTIFICACIONES
   ],
   providers: [OrdenesService],
   controllers: [OrdenesController],

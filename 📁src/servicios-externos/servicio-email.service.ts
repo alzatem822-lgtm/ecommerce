@@ -31,13 +31,8 @@ export class ServicioEmailService {
   async enviarEmailVerificacion(emailDestino: string, codigo: string): Promise<void> {
     const msg = {
       to: emailDestino,
-      from: this.sendgridFromEmail, // El email que verificaste en SendGrid
+      from: this.sendgridFromEmail,
       subject: 'Tu Código de Verificación',
-      
-      // Puedes usar texto plano
-      // text: `Tu código de verificación es: ${codigo}`,
-      
-      // O (recomendado) usar HTML simple
       html: `
         <div style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5;">
           <p>Hola,</p>
@@ -55,8 +50,29 @@ export class ServicioEmailService {
       this.logger.log(`Email de verificación enviado a ${emailDestino}`);
     } catch (error) {
       this.logger.error(`Error al enviar email a ${emailDestino}`, error.response?.body || error.message);
-      // Puedes lanzar una excepción si prefieres que el flujo se detenga
-      // throw new InternalServerErrorException('Error al enviar el email');
+    }
+  }
+
+  /**
+   * ✅ MÉTODO NUEVO: Envía un correo electrónico genérico para notificaciones
+   * @param emailDestino El email del destinatario
+   * @param asunto El asunto del email
+   * @param contenidoHtml El contenido HTML del email
+   */
+  async enviarEmailGenerico(emailDestino: string, asunto: string, contenidoHtml: string): Promise<void> {
+    const msg = {
+      to: emailDestino,
+      from: this.sendgridFromEmail,
+      subject: asunto,
+      html: contenidoHtml,
+    };
+
+    try {
+      await SendGrid.send(msg);
+      this.logger.log(`📧 Email genérico enviado a ${emailDestino}: ${asunto}`);
+    } catch (error) {
+      this.logger.error(`❌ Error al enviar email a ${emailDestino}`, error.response?.body || error.message);
+      throw error; // Relanzamos el error para manejarlo en el servicio de notificaciones
     }
   }
 }

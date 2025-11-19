@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, InternalServerErrorException, BadRequestException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
+import { plainToInstance } from 'class-transformer';
 import { Orden, EstadoOrden } from './entidades/orden.entity';
 import { OrdenItem } from './entidades/orden-item.entity';
 import { CrearOrdenDto } from './dto/crear-orden.dto';
 import { ActualizarEstadoOrdenDto } from './dto/actualizar-estado-orden.dto';
+import { OrdenResponseDto } from './dto/orden-response.dto';
 import { Usuario } from '../usuarios/entidades/usuario.entity';
 import { Producto } from '../productos/entidades/producto.entity';
 import { Carrito } from '../carrito/entidades/carrito.entity';
 import { CarritoItem } from '../carrito/entidades/carrito-item.entity';
+import { NotificacionesService } from '../notificaciones/servicios/notificaciones.service'; // ✅ AÑADIR IMPORT
 
 @Injectable()
 export class OrdenesService {
@@ -23,9 +26,14 @@ export class OrdenesService {
     private carritoRepository: Repository<Carrito>,
     @InjectRepository(CarritoItem)
     private carritoItemRepository: Repository<CarritoItem>,
+    @InjectRepository(Usuario) // ✅ AÑADIR REPOSITORIO DE USUARIO
+    private usuarioRepository: Repository<Usuario>,
+    private notificacionesService: NotificacionesService, // ✅ AÑADIR SERVICIO DE NOTIFICACIONES
   ) {}
 
-  async crearDesdeCarrito(usuarioId: string, crearOrdenDto: CrearOrdenDto): Promise<Orden> {
+  async crearDesdeCarrito(usuarioId: string, crearOrdenDto: CrearOrdenDto): Promise<OrdenResponseDto> {
+    let ordenCreada; // Mover declaración para acceso en catch
+
     try {
       console.log('🔍 DEBUG: Iniciando creación de orden para usuario:', usuarioId);
       
@@ -79,7 +87,7 @@ export class OrdenesService {
 
       // 4. Crear la orden - ✅ ASEGURAR que usuarioId tiene valor
       const orden = this.ordenRepository.create({
-        usuarioId: usuarioId, // ✅ EXPLÍCITAMENTE asignado
+        usuarioId: usuarioId,
         total: carrito.total,
         estado: 'pendiente',
         direccion: crearOrdenDto.direccion,
@@ -91,7 +99,7 @@ export class OrdenesService {
 
       console.log('🔍 DEBUG: Orden a crear:', orden);
 
-      const ordenCreada = await this.ordenRepository.save(orden);
+      ordenCreada = await this.ordenRepository.save(orden);
       console.log('🔍 DEBUG: Orden guardada en BD:', ordenCreada);
 
       // 5. Crear items de la orden y reducir stock
@@ -131,14 +139,39 @@ export class OrdenesService {
       await this.carritoRepository.update(carrito.id, { total: 0 });
       console.log('🔍 DEBUG: Carrito limpiado');
 
-      // 7. Devolver orden completa
+      // 7. Obtener orden completa para notificación
       const ordenCompleta = await this.ordenRepository.findOne({
         where: { id: ordenCreada.id },
-        relations: ['items', 'items.producto', 'usuario'],
+        relations: ['items', 'items.producto'],
       });
 
-      console.log('🔍 DEBUG: Orden completa a devolver:', ordenCompleta);
-      return ordenCompleta;
+      console.log('🔍 DEBUG: Orden completa antes de transformar:', ordenCompleta);
+
+      // ✅ 8. ENVIAR NOTIFICACIÓN DE CONFIRMACIÓN (NUEVO)
+      try {
+        const usuario = await this.obtenerUsuarioParaNotificacion(usuarioId);
+        const datosNotificacion = {
+          numeroOrden: ordenCreada.numeroOrden,
+          total: ordenCreada.total,
+          items: ordenCompleta.items,
+          direccion: ordenCreada.direccion,
+          usuarioEmail: usuario.email,
+          usuarioNombre: usuario.nombre,
+        };
+
+        await this.notificacionesService.enviarConfirmacionCompra(
+          usuarioId,
+          ordenCreada.id,
+          datosNotificacion
+        );
+        console.log('📧 Notificación de confirmación enviada');
+      } catch (error) {
+        console.error('❌ Error enviando notificación:', error);
+        // No lanzamos error para no afectar la creación de la orden
+      }
+
+      // ✅ TRANSFORMAR A DTO OPTIMIZADO
+      return plainToInstance(OrdenResponseDto, ordenCompleta);
 
     } catch (error) {
       console.error('🔍 ERROR DETALLADO EN CREAR ORDEN:');
@@ -157,6 +190,26 @@ export class OrdenesService {
     }
   }
 
+  /**
+   * ✅ MÉTODO AUXILIAR PARA OBTENER DATOS DE USUARIO
+   */
+  private async obtenerUsuarioParaNotificacion(usuarioId: string): Promise<{ email: string; nombre: string }> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: usuarioId },
+      select: ['email', 'nombre', 'apellido']
+    });
+
+    if (!usuario) {
+      throw new Error('Usuario no encontrado para notificación');
+    }
+
+    return {
+      email: usuario.email,
+      nombre: `${usuario.nombre} ${usuario.apellido}`
+    };
+  }
+
+  // ... (el resto de los métodos se mantienen igual)
   private async generarNumeroOrden(): Promise<string> {
     try {
       const fecha = new Date();
@@ -164,7 +217,6 @@ export class OrdenesService {
       const month = String(fecha.getMonth() + 1).padStart(2, '0');
       const day = String(fecha.getDate()).padStart(2, '0');
       
-      // Versión simplificada sin filtro de fecha
       const count = await this.ordenRepository.count();
       console.log('🔍 DEBUG: Count de órdenes existentes:', count);
       
@@ -175,20 +227,21 @@ export class OrdenesService {
       return numeroOrden;
     } catch (error) {
       console.error('🔍 ERROR generando número de orden:', error);
-      // Fallback si hay error
       return `ORD-${Date.now()}`;
     }
   }
 
-  async obtenerOrdenesUsuario(usuarioId: string): Promise<Orden[]> {
-    return await this.ordenRepository.find({
+  async obtenerOrdenesUsuario(usuarioId: string): Promise<OrdenResponseDto[]> {
+    const ordenes = await this.ordenRepository.find({
       where: { usuarioId },
       relations: ['items', 'items.producto'],
       order: { fechaCreacion: 'DESC' },
     });
+
+    return plainToInstance(OrdenResponseDto, ordenes);
   }
 
-  async obtenerOrdenPorId(id: string, usuarioId?: string): Promise<Orden> {
+  async obtenerOrdenPorId(id: string, usuarioId?: string): Promise<OrdenResponseDto> {
     const where: any = { id };
     if (usuarioId) {
       where.usuarioId = usuarioId;
@@ -196,24 +249,26 @@ export class OrdenesService {
 
     const orden = await this.ordenRepository.findOne({
       where,
-      relations: ['items', 'items.producto', 'usuario'],
+      relations: ['items', 'items.producto'],
     });
 
     if (!orden) {
       throw new NotFoundException('Orden no encontrada');
     }
 
-    return orden;
+    return plainToInstance(OrdenResponseDto, orden);
   }
 
-  async obtenerTodasOrdenes(): Promise<Orden[]> {
-    return await this.ordenRepository.find({
+  async obtenerTodasOrdenes(): Promise<OrdenResponseDto[]> {
+    const ordenes = await this.ordenRepository.find({
       relations: ['items', 'items.producto', 'usuario'],
       order: { fechaCreacion: 'DESC' },
     });
+
+    return plainToInstance(OrdenResponseDto, ordenes);
   }
 
-  async actualizarEstado(id: string, actualizarEstadoOrdenDto: ActualizarEstadoOrdenDto): Promise<Orden> {
+  async actualizarEstado(id: string, actualizarEstadoOrdenDto: ActualizarEstadoOrdenDto): Promise<OrdenResponseDto> {
     const orden = await this.obtenerOrdenPorId(id);
     
     await this.ordenRepository.update(id, { estado: actualizarEstadoOrdenDto.estado });
